@@ -1,0 +1,11 @@
+{
+	"labels": {
+		"OPEN_BROWSER_READY":["OPEN_BROWSER"],
+		"CLOSE_WINDOW_READY":["CLOSE_WINDOW"]
+	},
+	
+	"actions": {
+		"OPEN_BROWSER": "OPEN BROWSER",
+		"CLOSE_WINDOW": "CLOSE WINDOW"
+	}
+}

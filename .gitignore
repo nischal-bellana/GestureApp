@@ -1,4 +1,5 @@
 *.task
 .venv
 tags
-
+Training_Samples/*
+Models/*

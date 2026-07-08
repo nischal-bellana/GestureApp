@@ -10,22 +10,20 @@ import pickle
 import sys
 from collections import deque
 import subprocess
+import json
 
 
 def normalize_landmarks(landmark_list):
     """
-    Normalizes landmarks to make them translation and scale invariant.
-    1. Translation: Shifts the wrist (landmark 0) to (0, 0).
-    2. Scale: Divides all points by the distance between the wrist and middle finger base.
+    Ensures consistent gesture recognition regardless of hand distance from the camera or hand size variations.
     """
-    # Convert landmarks to a 2D numpy array (X, Y)
     landmarks = np.array([[lm.x, lm.y] for lm in landmark_list])
 
-    # 1. Translation Normalization (Subtract wrist coordinates from all points)
+    # Aligns all hand shapes to a common origin to prevent spatial screen positioning from skewing the classification
     wrist = landmarks[0]
     translated_landmarks = landmarks - wrist
 
-    # 2. Scale Normalization (Calculate distance between wrist [0] and MCP of middle finger [9])
+    # Establishes a reference length based on hand proportions to neutralize depth and hand-size discrepancies
     # This distance acts as a baseline bounding ruler for the hand size.
     scale_factor = np.linalg.norm(translated_landmarks[9])
 
@@ -35,28 +33,40 @@ def normalize_landmarks(landmark_list):
 
     normalized_landmarks = translated_landmarks / scale_factor
 
-    # Flatten the array into a 1D vector of 42 values (x0, y0, x1, y1, ...) 
-    # This format is perfect for feeding into a machine learning classifier.
+    # ML models (like SVM/RandomForest) require flat feature vectors rather than multi-dimensional spatial arrays
     return normalized_landmarks.flatten()
 
-GESTURE_LABEL = "OPEN_BROWSER"
-NO_GESTURE = "NO_GESTURE"
-gesture_label = GESTURE_LABEL 
-def add_training_Data(feature_vector, gesture_type="static"):
-    global gesture_label
+static_labels = []
+static_sel = 0
+dynamic_labels = {}
+dynamic_sel = 0
+actions = {}
 
-    # Open a CSV file in append mode
-    file_path = 'Training_Samples/gesture_data.csv'
-    if gesture_type=="dynamic":
-        file_path = 'Training_Samples/gesture_dynamic_data.csv'
+def add_training_Data(feature_vector, config_name, gesture_type="static"):
+    global static_labels
+    global static_sel
+    global dynamic_labels
+    global dynamic_sel
+
+    file_path = f'Training_Samples/{config_name}_{gesture_type}_samples.csv'
+    gesture_label = ""
+
+    if gesture_type=="static":
+        gesture_label = static_labels[static_sel]
+    else:
+        gesture_label = dynamic_labels.get(static_labels[static_sel])[dynamic_sel]
+
     with open(file_path, mode='a', newline='') as f:
         writer = csv.writer(f)
         
-        # Prepend the label to the normalized features
+        # Attaches the ground-truth label necessary for supervised training before saving the sample
         row = [gesture_label] + list(feature_vector)
         writer.writerow(row)
-        
-    print(f"Recorded 1 or 10 frames for {gesture_label}")
+    
+    if gesture_type=="static":
+        print(f"Recorded frame for {gesture_label}")
+    else:
+        print(f"Recorded frames for {gesture_label}")
 
 latest_result = None
 
@@ -64,9 +74,14 @@ def hand_detection_callback(result: vision.HandLandmarkerResult, output_image: m
     global latest_result
     latest_result = result
 
-def start_capture_stream(mode="sample", gesture_type="static"):
-    print("args:", mode, gesture_type)
-    # --- 1. STATE MACHINE SETUP ---
+def start_capture_stream(config_name, mode="sample", gesture_type="static"):
+    print("args:", mode, gesture_type, config_name)
+    config_data = None
+    with open(f"Configs/{config_name}.json","r") as file:
+        config_data = json.load(file)
+
+
+    # --- STATE MACHINE SETUP ---
     STATE_IDLE = 0
     STATE_ARMED = 1
 
@@ -76,16 +91,16 @@ def start_capture_stream(mode="sample", gesture_type="static"):
 
     gatekeeper_model_static = None
     gatekeeper_model_dynamic = None
+
     if mode=="test" or gesture_type=="dynamic":
-        with open('static_gesture_model.pkl', 'rb') as f:
+        with open(f'Models/{config_name}_static_model.pkl', 'rb') as f:
             gatekeeper_model_static = pickle.load(f)
-        with open('dynamic_gesture_model.pkl', 'rb') as f:
+    if mode=="test":
+        with open(f'Models/{config_name}_dynamic_model.pkl', 'rb') as f:
             gatekeeper_model_dynamic = pickle.load(f)
 
-
-
-    # --- MODEL INITIALIZATION (NEW API) ---
-    # Ensure 'hand_landmarker.task' is downloaded and in your working directory
+    # --- MODEL INITIALIZATION ---
+    # Ensure 'hand_landmarker.task' is downloaded and in your working directory for the pipeline to function
     base_options = python.BaseOptions(model_asset_path='hand_landmarker.task')
     options = vision.HandLandmarkerOptions(
         base_options=base_options,
@@ -97,24 +112,33 @@ def start_capture_stream(mode="sample", gesture_type="static"):
     )
     detector = vision.HandLandmarker.create_from_options(options)
 
-    # 0 accesses the default system webcam. Change to 1 or 2 if you have multiple cameras.
+    # Targets the primary system camera; alternative indices map to external hardware inputs
     cap = cv2.VideoCapture(0)
 
-    # Optional: Request a lower hardware resolution to save USB bandwidth
+    # Optional: Request a lower hardware resolution to save USB bandwidth and reduce processing overhead
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
-    # Initialize our 1-second timer
     last_capture_time = time.time()
-    capture_interval = 0.1  # 1 second
+    capture_interval = 0.1  
 
     print("Pipeline active (Tasks API). Point your hand at the camera...")
     print("Starting background capture. Press 'q' in the debug window to exit.")
 
-    #mode == sample
     is_capturing = False
     lct_2 = time.time()
-    global gesture_label
+
+    global static_labels
+    global static_sel
+    global dynamic_labels
+    global dynamic_sel
+    global actions
+
+    static_labels = list(config_data.get("labels").keys())
+    if mode=="sample" and gesture_type=="static":
+        static_labels.append("NO_GESTURE")
+    dynamic_labels = config_data.get("labels")
+    actions = config_data.get("actions")
 
     while True:
         # Constantly read frames so the hardware buffer doesn't back up with old images
@@ -134,37 +158,36 @@ def start_capture_stream(mode="sample", gesture_type="static"):
             rgb_frame = cv2.cvtColor(optimized_frame, cv2.COLOR_BGR2RGB)
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
 
-            # NEW: Calculate timestamp in milliseconds
             timestamp_ms = int(current_time * 1000)
 
-            # NEW: Use detect_async instead of detect
+            # detect_async prevents the main vision pipeline from blocking the main thread during ML inference
             detector.detect_async(mp_image, timestamp_ms)
 
-            # NEW: Process the result from the global variable (updated by the callback)
             if latest_result and latest_result.hand_landmarks:
                 for hand_landmarks in latest_result.hand_landmarks:
                     feature_vector = normalize_landmarks(hand_landmarks)
 
                     if mode=="sample" and gesture_type=="static":
                         if is_capturing:
-                            add_training_Data(feature_vector)
+                            add_training_Data(feature_vector, config_name)
                     elif mode=="test" or gesture_type=="dynamic":
                         if current_state == STATE_IDLE:
                             prediction = gatekeeper_model_static.predict([feature_vector])[0]
-                            if prediction == "OPEN_BROWSER_READY":
+
+                            if (mode=="test" and prediction in static_labels) or (prediction == static_labels[static_sel]):
                                 current_state = STATE_ARMED
                                 frame_buffer.clear()
                                 frame_buffer.append(feature_vector)
-                                print("Ready gesture detected! Shifting to State 1 (Armed)...")
+                                print(f"{prediction} gesture detected! Shifting to State 1 (Armed)...")
                         elif current_state == STATE_ARMED:
                             frame_buffer.append(feature_vector)
                     
-                            # Only check for triggers once we have gathered a base history
+                            # Only check for triggers once we have gathered a base history to compare against
                             if len(frame_buffer) == 10:
                                 oldest_frame = frame_buffer[0]
                                 current_frame = frame_buffer[-1]
                                 
-                                # Compute Euclidean distance between oldest frame shape and current frame shape
+                                # Measures the magnitude of spatial distortion over the timeframe to determine if a dynamic movement occurred
                                 shape_distance = np.linalg.norm(current_frame - oldest_frame)
                                 
                                 print(f"\rTracking Motion... Shape Variance: {shape_distance:.3f} / Threshold: {TRIGGER_THRESHOLD}", end="")
@@ -174,18 +197,21 @@ def start_capture_stream(mode="sample", gesture_type="static"):
                                     print(f"Significant gesture change detected ({shape_distance:.2f} > {TRIGGER_THRESHOLD})")
                                     
                                     # --- STATE 2: ACTION EXECUTION ---
-                                    # Extract the full 10-frame history matrix for your dynamic model
                                     sequence_to_classify = np.array(frame_buffer).flatten() 
                                     
                                     if mode=="sample":
-                                        add_training_Data(sequence_to_classify, gesture_type)
+                                        add_training_Data(sequence_to_classify, config_name, gesture_type)
                                     else:
-                                        prediction = gatekeeper_model_dynamic.predict([sequence_to_classify])[0]
-                                        if prediction == "OPEN_BROWSER": 
-                                            print("OPEN BROWSER gesture detected!!")
-                                            subprocess.Popen([r"C:\Program Files\Google\Chrome\Application\chrome.exe"])
+                                        dyn_prediction = gatekeeper_model_dynamic.predict([sequence_to_classify])[0]
+                                        if dyn_prediction in dynamic_labels.get(prediction):
+                                            print(f"{dyn_prediction} gesture detected!!")
+                                            print(f"Action: {actions.get(dyn_prediction)}")
+                                            if actions.get(dyn_prediction) == "OPEN BROWSER":
+                                                subprocess.Popen(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
+                                            elif actions.get(dyn_prediction) == "CLOSE WINDOW":
+                                                pyautogui.hotkey('alt', 'f4')
                                     
-                                    # Reset back to Idle post-execution
+                                    # Prevents double-triggering the action by enforcing a cooldown/reset cycle
                                     print("Action completed. Returning to STATE 0 (IDLE).")
                                     current_state = STATE_IDLE
                                     frame_buffer.clear()
@@ -204,19 +230,17 @@ def start_capture_stream(mode="sample", gesture_type="static"):
             last_capture_time = current_time
 
         # --- DEBUG FEED ---
-        # Drawing simple dots to avoid depending on old mediapipe drawing utilities
+        # Drawing simple dots to avoid depending on older, heavier mediapipe drawing utilities
         h, w, _ = frame.shape
-
         
         if latest_result and latest_result.hand_landmarks:
             for hand_landmarks in latest_result.hand_landmarks:
                 for lm in hand_landmarks:
-                    # The new API provides .x and .y as normalized floats between 0.0 and 1.0
+                    # Requires scaling up by frame dimensions to map the network's normalized coordinate space back to pixel space
                     cv2.circle(frame, (int((1-lm.x) * w), int(lm.y * h)), 4, (0, 255, 0), -1)
 
         if mode=="sample" and gesture_type=="static":
             cv2.circle(frame, (w-50, h-50), 10, (0, 255, 0) if is_capturing else (255, 0, 0), -1)
-
 
         cv2.imshow('Gesture Controller - Debug Feed', frame)
         key = cv2.waitKey(1) & 0xFF
@@ -224,11 +248,19 @@ def start_capture_stream(mode="sample", gesture_type="static"):
         if key == ord('q'):
            break
         elif mode=="sample" and key == ord('t'):
-            print("Toggled!")
-            gesture_label = GESTURE_LABEL if gesture_label!=GESTURE_LABEL else NO_GESTURE
+            if gesture_type=="static":
+                static_sel += 1
+                static_sel %= len(static_labels)
+                print(f"Selected {static_labels[static_sel]}")
+            else:
+                dynamic_sel += 1
+                if dynamic_sel >= len(dynamic_labels.get(static_labels[static_sel])):
+                    dynamic_sel = 0
+                    static_sel += 1
+                    static_sel %= len(static_labels)
+                print(f"Selected {dynamic_labels.get(static_labels[static_sel])[dynamic_sel]}")
 
-
-    # Clean up hardware resources when done
+    # Prevents memory leaks and explicitly releases the hardware lock on the camera device
     cap.release()
     cv2.destroyAllWindows()
 

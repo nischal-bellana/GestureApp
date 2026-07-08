@@ -8,15 +8,10 @@ import sys
 
 
 
-def train_static_gesture_model(mode="static"):
-    csv_file='Training_Samples/gesture_data.csv'
-    model_save_path='static_gesture_model.pkl' 
-    RANDOM_STATE = 42
-
-    if mode=='dynamic':
-        RANDOM_STATE = 420
-        model_save_path = 'dynamic_gesture_model.pkl'
-        csv_file = 'Training_Samples/gesture_dynamic_data.csv'
+def train_static_gesture_model(config_name, mode="static"):
+    csv_file=f'Training_Samples/{config_name}_{mode}_samples.csv'
+    model_save_path=f'Models/{config_name}_{mode}_model.pkl' 
+    RANDOM_STATE = 42 if mode=="static" else 420
     
     print(f"Loading dataset from {csv_file}...")
     # 1. Load the Data
