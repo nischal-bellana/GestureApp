@@ -5,7 +5,7 @@
 	},
 	
 	"actions": {
-		"OPEN_BROWSER": "OPEN BROWSER",
+		"OPEN_BROWSER": "OPEN chrome",
 		"CLOSE_WINDOW": "CLOSE WINDOW"
 	}
 }

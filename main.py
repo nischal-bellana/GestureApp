@@ -4,13 +4,12 @@ import numpy as np
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
-import pyautogui
 import csv
 import pickle
 import sys
 from collections import deque
-import subprocess
 import json
+import actions as act
 
 
 def normalize_landmarks(landmark_list):
@@ -85,8 +84,12 @@ def start_capture_stream(config_name, mode="sample", gesture_type="static"):
     STATE_IDLE = 0
     STATE_ARMED = 1
 
+    last_capture_time = time.time()
+    capture_interval = 0.05  
     current_state = STATE_IDLE
-    frame_buffer = deque(maxlen=10)
+    GESTURE_DUR = 0.7
+    FRAME_COUNT = int(GESTURE_DUR/capture_interval)
+    frame_buffer = deque(maxlen=FRAME_COUNT)
     TRIGGER_THRESHOLD = 1.5
 
     gatekeeper_model_static = None
@@ -119,8 +122,7 @@ def start_capture_stream(config_name, mode="sample", gesture_type="static"):
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
-    last_capture_time = time.time()
-    capture_interval = 0.1  
+
 
     print("Pipeline active (Tasks API). Point your hand at the camera...")
     print("Starting background capture. Press 'q' in the debug window to exit.")
@@ -183,7 +185,7 @@ def start_capture_stream(config_name, mode="sample", gesture_type="static"):
                             frame_buffer.append(feature_vector)
                     
                             # Only check for triggers once we have gathered a base history to compare against
-                            if len(frame_buffer) == 10:
+                            if len(frame_buffer) == FRAME_COUNT:
                                 oldest_frame = frame_buffer[0]
                                 current_frame = frame_buffer[-1]
                                 
@@ -206,13 +208,16 @@ def start_capture_stream(config_name, mode="sample", gesture_type="static"):
                                         if dyn_prediction in dynamic_labels.get(prediction):
                                             print(f"{dyn_prediction} gesture detected!!")
                                             print(f"Action: {actions.get(dyn_prediction)}")
-                                            if actions.get(dyn_prediction) == "OPEN BROWSER":
-                                                subprocess.Popen(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
-                                            elif actions.get(dyn_prediction) == "CLOSE WINDOW":
-                                                pyautogui.hotkey('alt', 'f4')
+                                            action_code = actions.get(dyn_prediction).split()
+                                            if action_code[0] == "OPEN":
+                                                act.open_App(action_code[1].lower())
+                                            elif action_code[0] == "CLOSE":
+                                                act.close_window()
+                                            else:
+                                                print("Action not recognized!")
                                     
                                     # Prevents double-triggering the action by enforcing a cooldown/reset cycle
-                                    print("Action completed. Returning to STATE 0 (IDLE).")
+                                    print("Returning to STATE 0 (IDLE).")
                                     current_state = STATE_IDLE
                                     frame_buffer.clear()
                     print(f"[{time.strftime('%H:%M:%S')}] Hand Detected!")
@@ -223,7 +228,7 @@ def start_capture_stream(config_name, mode="sample", gesture_type="static"):
                     frame_buffer.clear() 
 
             if mode=="sample" and gesture_type=="static":
-                if current_time - lct_2 >= 2:
+                if current_time - lct_2 >= 1.5:
                     is_capturing = not (is_capturing)
                     lct_2 = current_time
 
