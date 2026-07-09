@@ -139,6 +139,13 @@ def start_capture_stream(config_name, mode="sample", gesture_type="static"):
     static_labels = list(config_data.get("labels").keys())
     if mode=="sample" and gesture_type=="static":
         static_labels.append("NO_GESTURE")
+        file_path = f"Training_Samples/{config_name}_static_samples.csv"
+        if os.path.exists(file_path):
+            os.remove(file_path)
+    elif mode=="sample" and gesture_type=="dynamic":
+        file_path = f"Training_Samples/{config_name}_dynamic_samples.csv"
+        if os.path.exists(file_path):
+            os.remove(file_path)
     dynamic_labels = config_data.get("labels")
     actions = config_data.get("actions")
 
