@@ -1,11 +1,15 @@
 {
-	"labels": {
-		"OPEN_BROWSER_READY":["OPEN_BROWSER"],
-		"CLOSE_WINDOW_READY":["CLOSE_WINDOW"]
-	},
-	
-	"actions": {
-		"OPEN_BROWSER": "OPEN chrome",
-		"CLOSE_WINDOW": "CLOSE WINDOW"
-	}
+    "labels": {
+        "OPEN_BROWSER_READY": [
+            "OPEN_BROWSER"
+        ],
+        "CLOSE_WINDOW_READY": [
+            "CLOSE_WINDOW"
+        ]
+    },
+    "actions": {
+        "OPEN_BROWSER": "OPEN chrome",
+        "CLOSE_WINDOW": "CLOSE WINDOW"
+    },
+    "gesture_dur": 0.5
 }

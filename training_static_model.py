@@ -5,13 +5,18 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 import sys
-
-
+from main import CAPTURE_INTERVAL 
+import json
 
 def train_static_gesture_model(config_name, mode="static"):
     csv_file=f'Training_Samples/{config_name}_{mode}_samples.csv'
-    model_save_path=f'Models/{config_name}_{mode}_model.pkl' 
-    RANDOM_STATE = 42 if mode=="static" else 420
+    model_save_path=f'Models/{config_name}_{mode}_model.pkl'
+
+    RANDOM_STATE = 42
+    if mode=="dynamic":
+        with open(f"Configs/{config_name}.json", "r") as file:
+            config_data = json.load(file)
+            RANDOM_STATE = 42*int(config_data.get("gesture_dur")/CAPTURE_INTERVAL)
     
     print(f"Loading dataset from {csv_file}...")
     # 1. Load the Data

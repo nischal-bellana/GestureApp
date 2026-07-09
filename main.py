@@ -10,7 +10,9 @@ import sys
 from collections import deque
 import json
 import actions as act
+import os
 
+CAPTURE_INTERVAL = 0.05
 
 def normalize_landmarks(landmark_list):
     """
@@ -85,10 +87,10 @@ def start_capture_stream(config_name, mode="sample", gesture_type="static"):
     STATE_ARMED = 1
 
     last_capture_time = time.time()
-    capture_interval = 0.05  
     current_state = STATE_IDLE
-    GESTURE_DUR = 0.7
-    FRAME_COUNT = int(GESTURE_DUR/capture_interval)
+    CAPTURE_INTERVAL
+    GESTURE_DUR = config_data.get("gesture_dur")
+    FRAME_COUNT = int(GESTURE_DUR/CAPTURE_INTERVAL)
     frame_buffer = deque(maxlen=FRAME_COUNT)
     TRIGGER_THRESHOLD = 1.5
 
@@ -159,7 +161,7 @@ def start_capture_stream(config_name, mode="sample", gesture_type="static"):
 
         current_time = time.time()
 
-        if current_time - last_capture_time >= capture_interval:
+        if current_time - last_capture_time >= CAPTURE_INTERVAL:
 
             optimized_frame = cv2.resize(frame, (320, 240))
             optimized_frame = cv2.flip(optimized_frame, 1)

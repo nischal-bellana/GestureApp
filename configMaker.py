@@ -21,7 +21,8 @@ class GestureAppUI:
             "actions": {
                 "OPEN_BROWSER": "OPEN chrome",
                 "CLOSE_WINDOW": "CLOSE WINDOW"
-            }
+            },
+            "gesture_dur": 0.5
         }
 
         self.python_exe = sys.executable
@@ -87,6 +88,15 @@ class GestureAppUI:
         self.action_entry.pack(fill="x", pady=5)
         tk.Button(action_frame, text="Save Action", command=self.save_action_string, bg="#FFC107").pack(fill="x")
 
+        tk.Label(editor_frame, text="4. Gesture Duration").grid(row=2, column=2, sticky="w")
+        gesture_dur_frame = tk.Frame(editor_frame)
+        gesture_dur_frame.grid(row=3, column=2, sticky="nsew", padx=5, pady=5)
+
+        self.gesture_dur_scale = tk.Scale(gesture_dur_frame, from_=0.2, to=2, resolution=0.1, orient="horizontal", command=self.gesture_dur_changed)
+        self.gesture_dur_scale.pack(fill="x")
+        self.gesture_dur_scale.set(self.config_data.get("gesture_dur"))
+
+
     # --- 3. PIPELINE CONTROLS ---
     def build_pipeline_controls(self):
         pipeline_frame = tk.LabelFrame(self.root, text="Pipeline Execution", font=("Arial", 10, "bold"), padx=10, pady=10)
@@ -114,6 +124,7 @@ class GestureAppUI:
             self.list_static.insert(tk.END, static_name)
         self.list_dynamic.delete(0, tk.END)
         self.action_var.set("")
+        self.gesture_dur_scale.set(self.config_data.get("gesture_dur"))
 
     def on_static_select(self, event):
         selection = self.list_static.curselection()
@@ -133,6 +144,7 @@ class GestureAppUI:
         dyn_name = self.list_dynamic.get(selection[0])
         action_str = self.config_data["actions"].get(dyn_name, "")
         self.action_var.set(action_str)
+
 
     # --- LOGIC: ADD / DELETE ---
     def add_static(self):
@@ -192,6 +204,9 @@ class GestureAppUI:
         new_action = self.action_var.get()
         self.config_data["actions"][dyn_name] = new_action
         messagebox.showinfo("Saved", f"Action updated for {dyn_name}")
+
+    def gesture_dur_changed(self, value):
+        self.config_data["gesture_dur"] = float(value)
 
     # --- LOGIC: FILE IO & SCRIPT EXECUTION ---
     def save_config(self):
