@@ -33,26 +33,22 @@ This project uses a highly optimized **Two-Stage Hybrid Architecture** to balanc
 
 ## 🚀 Installation & Setup
 **Clone the repository:**
-
 ```bash
 git clone https://github.com/nischal-bellana/GestureApp.git
 ```
-**Install the dependencies:**
-It is recommended to use a virtual environment.
-
-Go to the project root directory
+**Go to the project root directory:**
 ```bash
 cd path\To\Project
 ```
-Initialize the virtual environment
+**Initialize the virtual environment:**
 ```bash
 python -m venv .venv
 ```
-Activate environment
+**Activate environment:**
 ```bash
 .venv\Scripts\activate
 ```
-Install the required dependecies
+**Install the required dependecies:**
 ```bash
 pip install -r requirements.txt
 ```
@@ -62,7 +58,7 @@ Download the official hand\_landmarker.task file from Google and place it in the
 
 Download [hand\_landmarker.task](https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task)
 
-Finally run the application
+**Finally run the application:**
 ```bash
 python configMaker.py
 ```
