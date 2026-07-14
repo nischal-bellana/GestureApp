@@ -40,8 +40,20 @@ git clone https://github.com/nischal-bellana/GestureApp.git
 **Install the dependencies:**
 It is recommended to use a virtual environment.
 
+Go to the project root directory
+```bash
+cd path\To\Project
+```
+Initialize the virtual environment
 ```bash
 python -m venv .venv
+```
+Activate environment
+```bash
+.venv\Scripts\activate
+```
+Install the required dependecies
+```bash
 pip install -r requirements.txt
 ```
 
@@ -50,21 +62,14 @@ Download the official hand\_landmarker.task file from Google and place it in the
 
 Download [hand\_landmarker.task](https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task)
 
-## 🎮 How to Use (The Pipeline)
-Go to the project root directory
-```bash
-cd path\To\Project
-```
-Activate the virtual environment
-```bash
-.venv\Scripts\activate
-```
-Run the application:
+Finally run the application
 ```bash
 python configMaker.py
 ```
 
-## The 6-Step Workflow:
+## 🎮 How to Use (The Pipeline)
+
+### The 6-Step Workflow:
 **Create/Load a Config:** Use the UI to define a Static Gesture (e.g., OPEN\_BROWSER\_READY), map it to a Dynamic Gesture, and assign an action string (e.g., OPEN chrome).
 
 **Record Static Gestures:** Click Step 1 in the UI to open the webcam. Press t to toggle through your gestures and record baseline shape data and press q to end this step.
