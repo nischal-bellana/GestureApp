@@ -238,9 +238,6 @@ class GestureAppUI:
         config_name = self.config_name_var.get().strip()
         actual_cmd = [self.python_exe] + [arg.replace("{config}", config_name) for arg in cmd_template]
         
-        # Save before running to ensure scripts use the latest UI state
-        self.save_config()
-        
         try:
             subprocess.Popen(actual_cmd)
         except Exception as e:

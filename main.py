@@ -9,7 +9,7 @@ import pickle
 import sys
 from collections import deque
 import json
-import actions as act
+from actions import handle_action
 import os
 
 CAPTURE_INTERVAL = 0.05
@@ -88,7 +88,7 @@ def start_capture_stream(config_name, mode="sample", gesture_type="static"):
 
     last_capture_time = time.time()
     current_state = STATE_IDLE
-    CAPTURE_INTERVAL
+    sample_interval = 2
     GESTURE_DUR = config_data.get("gesture_dur")
     FRAME_COUNT = int(GESTURE_DUR/CAPTURE_INTERVAL)
     frame_buffer = deque(maxlen=FRAME_COUNT)
@@ -184,15 +184,23 @@ def start_capture_stream(config_name, mode="sample", gesture_type="static"):
                     elif mode=="test" or gesture_type=="dynamic":
                         if current_state == STATE_IDLE:
                             prediction = gatekeeper_model_static.predict([feature_vector])[0]
-
-                            if (mode=="test" and prediction in static_labels) or (prediction == static_labels[static_sel]):
+                            if (mode=="test" and prediction in static_labels) or (is_capturing and (prediction == static_labels[static_sel])):
                                 current_state = STATE_ARMED
                                 frame_buffer.clear()
                                 frame_buffer.append(feature_vector)
+                                if mode=="test":
+                                    static_sel = static_labels.index(prediction)
                                 print(f"{prediction} gesture detected! Shifting to State 1 (Armed)...")
                         elif current_state == STATE_ARMED:
-                            frame_buffer.append(feature_vector)
-                    
+                            prediction = gatekeeper_model_static.predict([frame_buffer[0]])[0]
+
+                            if prediction != static_labels[static_sel]:
+                                print("static gesture changed and no action: Returning to STATE 0 (IDLE).")
+                                current_state = STATE_IDLE
+                                frame_buffer.clear()
+                                break
+
+                            frame_buffer.append(feature_vector) 
                             # Only check for triggers once we have gathered a base history to compare against
                             if len(frame_buffer) == FRAME_COUNT:
                                 oldest_frame = frame_buffer[0]
@@ -212,21 +220,16 @@ def start_capture_stream(config_name, mode="sample", gesture_type="static"):
                                     
                                     if mode=="sample":
                                         add_training_Data(sequence_to_classify, config_name, gesture_type)
+                                            
                                     else:
                                         dyn_prediction = gatekeeper_model_dynamic.predict([sequence_to_classify])[0]
                                         if dyn_prediction in dynamic_labels.get(prediction):
                                             print(f"{dyn_prediction} gesture detected!!")
                                             print(f"Action: {actions.get(dyn_prediction)}")
-                                            action_code = actions.get(dyn_prediction).split()
-                                            if action_code[0] == "OPEN":
-                                                act.open_App(action_code[1].lower())
-                                            elif action_code[0] == "CLOSE":
-                                                act.close_window()
-                                            else:
-                                                print("Action not recognized!")
+                                            handle_action(actions.get(dyn_prediction))
                                     
                                     # Prevents double-triggering the action by enforcing a cooldown/reset cycle
-                                    print("Returning to STATE 0 (IDLE).")
+                                    print("Quick gesture change handled: Returning to STATE 0 (IDLE).")
                                     current_state = STATE_IDLE
                                     frame_buffer.clear()
                     print(f"[{time.strftime('%H:%M:%S')}] Hand Detected!")
@@ -236,8 +239,8 @@ def start_capture_stream(config_name, mode="sample", gesture_type="static"):
                     current_state = STATE_IDLE
                     frame_buffer.clear() 
 
-            if mode=="sample" and gesture_type=="static":
-                if current_time - lct_2 >= 1.5:
+            if mode=="sample":
+                if current_time - lct_2 >= sample_interval:
                     is_capturing = not (is_capturing)
                     lct_2 = current_time
 
@@ -253,8 +256,14 @@ def start_capture_stream(config_name, mode="sample", gesture_type="static"):
                     # Requires scaling up by frame dimensions to map the network's normalized coordinate space back to pixel space
                     cv2.circle(frame, (int((1-lm.x) * w), int(lm.y * h)), 4, (0, 255, 0), -1)
 
-        if mode=="sample" and gesture_type=="static":
+        if mode=="sample":
             cv2.circle(frame, (w-50, h-50), 10, (0, 255, 0) if is_capturing else (255, 0, 0), -1)
+            selected = "" 
+            if gesture_type=="static":
+                selected = f"Selected {static_labels[static_sel]}"
+            else:
+                selected = f"Selected {dynamic_labels.get(static_labels[static_sel])[dynamic_sel]}"
+            cv2.putText(frame, selected, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
 
         cv2.imshow('Gesture Controller - Debug Feed', frame)
         key = cv2.waitKey(1) & 0xFF
